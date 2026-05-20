@@ -1,4 +1,4 @@
-# gsc-search-console-cli
+# gsc-cli
 
 A small CLI for Google Search Console analytics, sitemaps, verified sites, and URL inspection.
 
@@ -9,7 +9,7 @@ It uses Google's OAuth installed-app flow and direct REST calls. After build, th
 Once published to npm:
 
 ```bash
-npm install -g @framara/gsc-search-console-cli
+npm install -g @framara/gsc-cli
 ```
 
 Then run it from anywhere:
@@ -21,14 +21,14 @@ gsc help
 You can also run it without a permanent global install:
 
 ```bash
-npx @framara/gsc-search-console-cli help
+npx @framara/gsc-cli help
 ```
 
 ## Local Development
 
 ```bash
-git clone https://github.com/framara/gsc-search-console-cli.git
-cd gsc-search-console-cli
+git clone https://github.com/framara/gsc-cli.git
+cd gsc-cli
 pnpm install
 pnpm build
 pnpm link --global
@@ -43,7 +43,7 @@ gsc help
 To unlink later:
 
 ```bash
-pnpm remove --global @framara/gsc-search-console-cli
+pnpm remove --global @framara/gsc-cli
 ```
 
 ## Google Setup
@@ -67,7 +67,7 @@ gsc auth login \
 The CLI prints a Google login URL. Open it, approve access, and the local callback will save tokens at:
 
 ```text
-~/.config/gsc-search-console-cli/tokens.json
+~/.config/gsc-cli/tokens.json
 ```
 
 ## Commands

@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { URL, URLSearchParams } from 'node:url';
 
-const CONFIG_DIR = join(homedir(), '.config', 'gsc-search-console-cli');
+const CONFIG_DIR = join(homedir(), '.config', 'gsc-cli');
 const TOKEN_PATH = join(CONFIG_DIR, 'tokens.json');
 const AUTH_SCOPE = 'https://www.googleapis.com/auth/webmasters';
 const OAUTH_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
@@ -477,7 +477,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function printHelp(): void {
-  console.log(`gsc-search-console-cli
+  console.log(`gsc-cli
 
 Usage:
   gsc auth login --client-id <id> --client-secret <secret>
