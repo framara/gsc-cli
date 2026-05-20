@@ -1,0 +1,50 @@
+{
+  "name": "@framara/gsc-search-console-cli",
+  "version": "0.1.0",
+  "description": "A zero-runtime-dependency CLI for Google Search Console analytics, sitemaps, sites, and URL inspection.",
+  "type": "module",
+  "bin": {
+    "gsc": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "postbuild": "chmod +x dist/index.js",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepack": "pnpm build",
+    "pack:dry": "pnpm pack --dry-run"
+  },
+  "keywords": [
+    "google-search-console",
+    "gsc",
+    "seo",
+    "cli",
+    "search-console",
+    "sitemap",
+    "url-inspection"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "author": "Francisco Martínez",
+  "license": "MIT",
+  "homepage": "https://github.com/framara/gsc-search-console-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/framara/gsc-search-console-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/framara/gsc-search-console-cli/issues"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
