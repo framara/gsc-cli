@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http';
+import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -12,6 +13,8 @@ const OAUTH_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const WEBMASTERS_BASE_URL = 'https://www.googleapis.com/webmasters/v3';
 const INSPECTION_BASE_URL = 'https://searchconsole.googleapis.com/v1';
+const DEFAULT_CLIENT_ID = '';
+const DEFAULT_CLIENT_SECRET = '';
 
 type TokenStore = {
   clientId: string;
@@ -22,6 +25,11 @@ type TokenStore = {
 };
 
 type CliOptions = Record<string, string | boolean>;
+
+type OAuthClient = {
+  clientId: string;
+  clientSecret: string;
+};
 
 type AnalyticsRow = {
   keys?: string[];
@@ -109,23 +117,24 @@ function parseArgs(args: string[]): { command: string[]; options: CliOptions } {
 }
 
 async function authLogin(options: CliOptions): Promise<void> {
-  const clientId = stringOption(options, 'clientId') ?? process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = stringOption(options, 'clientSecret') ?? process.env.GOOGLE_CLIENT_SECRET;
+  const client = await resolveOAuthClient(options);
   const port = Number(stringOption(options, 'port') ?? '8787');
-
-  if (!clientId || !clientSecret) {
-    throw new Error('Missing --client-id/--client-secret or GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET.');
-  }
+  const shouldOpenBrowser = options.noBrowser !== true;
 
   const redirectUri = `http://127.0.0.1:${port}/oauth2/callback`;
-  const code = await receiveOAuthCode({ clientId, redirectUri, port });
+  const code = await receiveOAuthCode({
+    clientId: client.clientId,
+    openBrowser: shouldOpenBrowser,
+    redirectUri,
+    port,
+  });
   const tokenResponse = await postForm<{
     access_token: string;
     expires_in: number;
     refresh_token?: string;
   }>(OAUTH_TOKEN_URL, {
-    client_id: clientId,
-    client_secret: clientSecret,
+    client_id: client.clientId,
+    client_secret: client.clientSecret,
     code,
     grant_type: 'authorization_code',
     redirect_uri: redirectUri,
@@ -136,8 +145,8 @@ async function authLogin(options: CliOptions): Promise<void> {
   }
 
   await saveTokens({
-    clientId,
-    clientSecret,
+    clientId: client.clientId,
+    clientSecret: client.clientSecret,
     accessToken: tokenResponse.access_token,
     refreshToken: tokenResponse.refresh_token,
     expiresAt: Date.now() + tokenResponse.expires_in * 1000,
@@ -148,6 +157,7 @@ async function authLogin(options: CliOptions): Promise<void> {
 
 async function receiveOAuthCode(input: {
   clientId: string;
+  openBrowser: boolean;
   redirectUri: string;
   port: number;
 }): Promise<string> {
@@ -195,9 +205,80 @@ async function receiveOAuthCode(input: {
       });
 
       console.log('Open this URL in your browser:');
-      console.log(`${OAUTH_AUTH_URL}?${params.toString()}`);
+      const authUrl = `${OAUTH_AUTH_URL}?${params.toString()}`;
+      console.log(authUrl);
+
+      if (input.openBrowser) {
+        openBrowser(authUrl).catch(() => {
+          console.log('Could not open the browser automatically. Use the URL above.');
+        });
+      }
     });
   });
+}
+
+async function resolveOAuthClient(options: CliOptions): Promise<OAuthClient> {
+  const configPath = stringOption(options, 'clientConfig');
+
+  if (configPath) {
+    return await loadOAuthClientConfig(configPath);
+  }
+
+  const explicitClientId = stringOption(options, 'clientId') ?? process.env.GOOGLE_CLIENT_ID;
+  const explicitClientSecret =
+    stringOption(options, 'clientSecret') ?? process.env.GOOGLE_CLIENT_SECRET;
+
+  if (explicitClientId && explicitClientSecret) {
+    return {
+      clientId: explicitClientId,
+      clientSecret: explicitClientSecret,
+    };
+  }
+
+  if (DEFAULT_CLIENT_ID && DEFAULT_CLIENT_SECRET) {
+    return {
+      clientId: DEFAULT_CLIENT_ID,
+      clientSecret: DEFAULT_CLIENT_SECRET,
+    };
+  }
+
+  throw new Error(
+    [
+      'No OAuth client is configured.',
+      'Use gsc auth login --client-config client_secret.json,',
+      'or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.',
+      'Published builds should include the default gsc-cli OAuth client.',
+    ].join(' '),
+  );
+}
+
+async function loadOAuthClientConfig(path: string): Promise<OAuthClient> {
+  const raw = JSON.parse(await readFile(path, 'utf8')) as {
+    installed?: { client_id?: string; client_secret?: string };
+    web?: { client_id?: string; client_secret?: string };
+  };
+  const client = raw.installed ?? raw.web;
+
+  if (!client?.client_id || !client.client_secret) {
+    throw new Error('OAuth client config must contain installed.client_id and installed.client_secret.');
+  }
+
+  return {
+    clientId: client.client_id,
+    clientSecret: client.client_secret,
+  };
+}
+
+async function openBrowser(url: string): Promise<void> {
+  const command =
+    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
+  const child = spawn(command, args, {
+    detached: true,
+    stdio: 'ignore',
+  });
+
+  child.unref();
 }
 
 async function listSites(options: CliOptions): Promise<void> {
@@ -480,6 +561,8 @@ function printHelp(): void {
   console.log(`gsc-cli
 
 Usage:
+  gsc auth login [--no-browser]
+  gsc auth login --client-config <client_secret.json>
   gsc auth login --client-id <id> --client-secret <secret>
   gsc sites list [--json]
   gsc sitemaps list --site <site> [--json]

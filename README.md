@@ -46,28 +46,58 @@ To unlink later:
 pnpm remove --global @framara/gsc-cli
 ```
 
-## Google Setup
+## Login
 
-Create OAuth credentials in Google Cloud:
+Authenticate with Google:
+
+```bash
+gsc auth login
+```
+
+The CLI opens a browser, asks you to approve Google Search Console access, and
+stores tokens locally.
+
+If you are on a remote machine or do not want the browser to open
+automatically:
+
+```bash
+gsc auth login --no-browser
+```
+
+The CLI will print the login URL instead.
+
+Tokens are stored at:
+
+```text
+~/.config/gsc-cli/tokens.json
+```
+
+## Advanced Auth
+
+Published builds should include the default `gsc-cli` OAuth client so normal
+users do not need to create Google Cloud credentials.
+
+For development, forks, or private deployments, you can bring your own OAuth
+client. Create OAuth credentials in Google Cloud:
 
 1. Create or select a Google Cloud project.
 2. Enable the **Google Search Console API**.
 3. Configure the OAuth consent screen.
 4. Create an OAuth client ID for a **Desktop app**.
-5. Copy the Client ID and Client Secret.
+5. Download the OAuth JSON file or copy the Client ID and Client Secret.
 
-Authenticate the CLI:
+Use the downloaded JSON file:
+
+```bash
+gsc auth login --client-config ~/Downloads/client_secret.json
+```
+
+Or pass credentials directly:
 
 ```bash
 gsc auth login \
   --client-id "$GOOGLE_CLIENT_ID" \
   --client-secret "$GOOGLE_CLIENT_SECRET"
-```
-
-The CLI prints a Google login URL. Open it, approve access, and the local callback will save tokens at:
-
-```text
-~/.config/gsc-cli/tokens.json
 ```
 
 ## Commands
