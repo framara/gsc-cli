@@ -8,11 +8,12 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "PRIVACY.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "postbuild": "chmod +x dist/index.js",
+    "postbuild": "node scripts/inject-oauth-client.mjs && chmod +x dist/index.js",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",

@@ -72,10 +72,43 @@ Tokens are stored at:
 ~/.config/gsc-cli/tokens.json
 ```
 
+Check whether the CLI is authenticated:
+
+```bash
+gsc auth status
+```
+
+Remove the local token:
+
+```bash
+gsc auth logout
+```
+
+Remove the local token and ask Google to revoke the stored refresh token:
+
+```bash
+gsc auth logout --revoke
+```
+
 ## Advanced Auth
 
 Published builds should include the default `gsc-cli` OAuth client so normal
 users do not need to create Google Cloud credentials.
+
+The bundled OAuth client is a Google Desktop app client. Desktop app client
+credentials are distributed with the application and are not treated like server
+secrets. Users still grant access with their own Google account, and tokens are
+stored only on the user's machine.
+
+The public repository keeps those values out of source because GitHub secret
+scanning blocks OAuth client values. Release builds inject them into `dist/`
+from environment variables:
+
+```bash
+GSC_CLI_DEFAULT_CLIENT_ID="..." \
+GSC_CLI_DEFAULT_CLIENT_SECRET="..." \
+pnpm build
+```
 
 For development, forks, or private deployments, you can bring your own OAuth
 client. Create OAuth credentials in Google Cloud:
@@ -178,6 +211,17 @@ pnpm pack:dry
 Publish publicly:
 
 ```bash
+npm publish --access public
+```
+
+Before a public release, review [`PRIVACY.md`](./PRIVACY.md) and complete any
+Google OAuth verification steps requested for the Search Console scope.
+
+To build the public npm package with the default OAuth client:
+
+```bash
+GSC_CLI_DEFAULT_CLIENT_ID="..." \
+GSC_CLI_DEFAULT_CLIENT_SECRET="..." \
 npm publish --access public
 ```
 

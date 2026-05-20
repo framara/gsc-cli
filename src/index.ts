@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { URL, URLSearchParams } from 'node:url';
@@ -11,10 +11,11 @@ const TOKEN_PATH = join(CONFIG_DIR, 'tokens.json');
 const AUTH_SCOPE = 'https://www.googleapis.com/auth/webmasters';
 const OAUTH_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const OAUTH_REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const WEBMASTERS_BASE_URL = 'https://www.googleapis.com/webmasters/v3';
 const INSPECTION_BASE_URL = 'https://searchconsole.googleapis.com/v1';
-const DEFAULT_CLIENT_ID = '';
-const DEFAULT_CLIENT_SECRET = '';
+const DEFAULT_CLIENT_ID = '__GSC_CLI_DEFAULT_CLIENT_ID__';
+const DEFAULT_CLIENT_SECRET = '__GSC_CLI_DEFAULT_CLIENT_SECRET__';
 
 type TokenStore = {
   clientId: string;
@@ -46,6 +47,12 @@ async function main(): Promise<void> {
     switch (command.join(' ')) {
       case 'auth login':
         await authLogin(options);
+        break;
+      case 'auth logout':
+        await authLogout(options);
+        break;
+      case 'auth status':
+        await authStatus(options);
         break;
       case 'sites list':
         await listSites(options);
@@ -155,6 +162,34 @@ async function authLogin(options: CliOptions): Promise<void> {
   console.log(`Authenticated. Tokens saved to ${TOKEN_PATH}`);
 }
 
+async function authLogout(options: CliOptions): Promise<void> {
+  const tokens = await loadTokens();
+
+  if (options.revoke === true) {
+    await revokeToken(tokens.refreshToken);
+  }
+
+  await deleteTokens();
+  console.log(
+    options.revoke === true
+      ? 'Logged out and revoked the stored refresh token.'
+      : 'Logged out locally. Run with --revoke to also revoke the Google refresh token.',
+  );
+}
+
+async function authStatus(options: CliOptions): Promise<void> {
+  const tokens = await loadTokens();
+  const expiresAt = new Date(tokens.expiresAt).toISOString();
+  const value = {
+    authenticated: true,
+    tokenPath: TOKEN_PATH,
+    clientId: tokens.clientId,
+    expiresAt,
+  };
+
+  printResult(value, options);
+}
+
 async function receiveOAuthCode(input: {
   clientId: string;
   openBrowser: boolean;
@@ -235,7 +270,7 @@ async function resolveOAuthClient(options: CliOptions): Promise<OAuthClient> {
     };
   }
 
-  if (DEFAULT_CLIENT_ID && DEFAULT_CLIENT_SECRET) {
+  if (isConfiguredDefaultClient(DEFAULT_CLIENT_ID, DEFAULT_CLIENT_SECRET)) {
     return {
       clientId: DEFAULT_CLIENT_ID,
       clientSecret: DEFAULT_CLIENT_SECRET,
@@ -249,6 +284,15 @@ async function resolveOAuthClient(options: CliOptions): Promise<OAuthClient> {
       'or set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.',
       'Published builds should include the default gsc-cli OAuth client.',
     ].join(' '),
+  );
+}
+
+function isConfiguredDefaultClient(clientId: string, clientSecret: string): boolean {
+  return (
+    clientId.length > 0 &&
+    clientSecret.length > 0 &&
+    !clientId.startsWith('__GSC_CLI_') &&
+    !clientSecret.startsWith('__GSC_CLI_')
   );
 }
 
@@ -453,6 +497,19 @@ async function postForm<T>(url: string, values: Record<string, string>): Promise
   return (await response.json()) as T;
 }
 
+async function revokeToken(token: string): Promise<void> {
+  const response = await fetch(OAUTH_REVOKE_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token }),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OAuth revoke error ${response.status}: ${text}`);
+  }
+}
+
 async function loadTokens(): Promise<TokenStore> {
   try {
     return JSON.parse(await readFile(TOKEN_PATH, 'utf8')) as TokenStore;
@@ -464,6 +521,14 @@ async function loadTokens(): Promise<TokenStore> {
 async function saveTokens(tokens: TokenStore): Promise<void> {
   await mkdir(dirname(TOKEN_PATH), { recursive: true, mode: 0o700 });
   await writeFile(TOKEN_PATH, `${JSON.stringify(tokens, null, 2)}\n`, { mode: 0o600 });
+}
+
+async function deleteTokens(): Promise<void> {
+  try {
+    await unlink(TOKEN_PATH);
+  } catch {
+    throw new Error('Not authenticated. No token file was found.');
+  }
 }
 
 function printResult(value: unknown, options: CliOptions): void {
@@ -564,6 +629,8 @@ Usage:
   gsc auth login [--no-browser]
   gsc auth login --client-config <client_secret.json>
   gsc auth login --client-id <id> --client-secret <secret>
+  gsc auth status [--json]
+  gsc auth logout [--revoke]
   gsc sites list [--json]
   gsc sitemaps list --site <site> [--json]
   gsc sitemaps submit --site <site> --url <sitemap-url>
